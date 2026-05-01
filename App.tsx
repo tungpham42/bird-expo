@@ -10,8 +10,19 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Rect, Ellipse, Path, G, Line } from "react-native-svg";
+import { Audio } from "expo-av";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+// --- Base64 Audio Constants ---
+// Replace these dummy silent WAVs with your actual Base64 strings.
+// Ensure they have the correct data URI prefix (e.g., 'data:audio/mp3;base64,...' or 'data:audio/wav;base64,...')
+const JUMP_B64 =
+  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+const SCORE_B64 =
+  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+const CRASH_B64 =
+  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
 
 // --- Global Constants ---
 const PIPE_WIDTH = 75;
@@ -29,7 +40,6 @@ interface LevelConfig {
   pipeGap: number;
 }
 
-// 1. Tinh chỉnh lại Physics để chim lơ lửng hơn, bay chậm hơn
 const LEVEL_CONFIGS: Record<Level, LevelConfig> = {
   Easy: {
     gravity: 0.25,
@@ -124,10 +134,61 @@ export default function App() {
   const velocityRef = useRef(0);
   const currentConfig = LEVEL_CONFIGS[level];
 
-  // --- Audio placeholders ---
-  const playJumpSound = useCallback(() => {}, []);
-  const playScoreSound = useCallback(() => {}, []);
-  const playCrashSound = useCallback(() => {}, []);
+  // --- Audio References ---
+  const jumpSoundRef = useRef<Audio.Sound | null>(null);
+  const scoreSoundRef = useRef<Audio.Sound | null>(null);
+  const crashSoundRef = useRef<Audio.Sound | null>(null);
+
+  // --- Load Audio on Mount ---
+  useEffect(() => {
+    async function loadAudio() {
+      try {
+        const { sound: jumpSound } = await Audio.Sound.createAsync({
+          uri: JUMP_B64,
+        });
+        const { sound: scoreSound } = await Audio.Sound.createAsync({
+          uri: SCORE_B64,
+        });
+        const { sound: crashSound } = await Audio.Sound.createAsync({
+          uri: CRASH_B64,
+        });
+
+        jumpSoundRef.current = jumpSound;
+        scoreSoundRef.current = scoreSound;
+        crashSoundRef.current = crashSound;
+      } catch (error) {
+        console.warn("Failed to load sounds:", error);
+      }
+    }
+
+    loadAudio();
+
+    // Cleanup sounds when component unmounts
+    return () => {
+      jumpSoundRef.current?.unloadAsync();
+      scoreSoundRef.current?.unloadAsync();
+      crashSoundRef.current?.unloadAsync();
+    };
+  }, []);
+
+  // --- Audio Playback Functions ---
+  const playJumpSound = useCallback(async () => {
+    try {
+      await jumpSoundRef.current?.replayAsync();
+    } catch (e) {}
+  }, []);
+
+  const playScoreSound = useCallback(async () => {
+    try {
+      await scoreSoundRef.current?.replayAsync();
+    } catch (e) {}
+  }, []);
+
+  const playCrashSound = useCallback(async () => {
+    try {
+      await crashSoundRef.current?.replayAsync();
+    } catch (e) {}
+  }, []);
 
   // --- Game Loop (Physics & Movement) ---
   useEffect(() => {
@@ -184,7 +245,6 @@ export default function App() {
   useEffect(() => {
     if (gameState !== "PLAYING") return;
 
-    // 2. Thu gọn hitbox (khung va chạm) vào tâm để loại bỏ viền trong suốt của ảnh SVG
     const HITBOX_PADDING_X = 10;
     const HITBOX_PADDING_Y = 12;
 
@@ -203,11 +263,9 @@ export default function App() {
     }
 
     pipes.forEach((pipe, index) => {
-      // Kiểm tra chim có nằm trong chiều ngang của ống nước không
       const inPipeHorizontalRange =
         birdRight >= pipe.x && birdLeft <= pipe.x + PIPE_WIDTH;
 
-      // Kiểm tra chim có chạm đầu vào mép dưới ống trên, hoặc thân dưới vào mép trên ống dưới
       const hitTopPipe = birdTop <= pipe.topHeight;
       const hitBottomPipe =
         birdBottom >= pipe.topHeight + currentConfig.pipeGap;
@@ -217,7 +275,6 @@ export default function App() {
         setGameState("GAME_OVER");
       }
 
-      // Xử lý cộng điểm
       if (!pipe.passed && pipe.x + PIPE_WIDTH < birdLeft) {
         playScoreSound();
         setScore((prev) => prev + 1);
