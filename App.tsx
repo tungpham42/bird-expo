@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Rect, Ellipse, Path, G, Line } from "react-native-svg";
-import { Audio } from "expo-av";
+import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -61,6 +61,12 @@ interface PipeData {
   topHeight: number;
   passed: boolean;
 }
+
+// --- Sound Sources ---
+// Preload files for the useAudioPlayer hooks
+const jumpAudioSource = require("./assets/sounds/jump.wav");
+const scoreAudioSource = require("./assets/sounds/score.wav");
+const crashAudioSource = require("./assets/sounds/crash.wav");
 
 // --- Cloud Component for Animations ---
 const AnimatedCloud = ({
@@ -124,61 +130,40 @@ export default function App() {
   const velocityRef = useRef(0);
   const currentConfig = LEVEL_CONFIGS[level];
 
-  // --- Audio References ---
-  const jumpSoundRef = useRef<Audio.Sound | null>(null);
-  const scoreSoundRef = useRef<Audio.Sound | null>(null);
-  const crashSoundRef = useRef<Audio.Sound | null>(null);
+  // --- Audio Players (Using expo-audio) ---
+  const jumpPlayer = useAudioPlayer(jumpAudioSource);
+  const scorePlayer = useAudioPlayer(scoreAudioSource);
+  const crashPlayer = useAudioPlayer(crashAudioSource);
 
-  // --- Load Audio on Mount ---
   useEffect(() => {
-    async function loadAudio() {
-      try {
-        const { sound: jumpSound } = await Audio.Sound.createAsync(
-          require("./assets/sounds/jump.wav"),
-        );
-        const { sound: scoreSound } = await Audio.Sound.createAsync(
-          require("./assets/sounds/score.wav"),
-        );
-        const { sound: crashSound } = await Audio.Sound.createAsync(
-          require("./assets/sounds/crash.wav"),
-        );
-
-        jumpSoundRef.current = jumpSound;
-        scoreSoundRef.current = scoreSound;
-        crashSoundRef.current = crashSound;
-      } catch (error) {
-        console.warn("Failed to load sounds:", error);
-      }
-    }
-
-    loadAudio();
-
-    // Cleanup sounds when component unmounts
-    return () => {
-      jumpSoundRef.current?.unloadAsync();
-      scoreSoundRef.current?.unloadAsync();
-      crashSoundRef.current?.unloadAsync();
-    };
+    // Configure audio to play even if the physical switch is on silent (iOS)
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      interruptionMode: "duckOthers",
+    }).catch((err) => console.warn("Could not set audio mode:", err));
   }, []);
 
   // --- Audio Playback Functions ---
-  const playJumpSound = useCallback(async () => {
-    try {
-      await jumpSoundRef.current?.replayAsync();
-    } catch (e) {}
-  }, []);
+  const playJumpSound = useCallback(() => {
+    if (jumpPlayer) {
+      jumpPlayer.seekTo(0);
+      jumpPlayer.play();
+    }
+  }, [jumpPlayer]);
 
-  const playScoreSound = useCallback(async () => {
-    try {
-      await scoreSoundRef.current?.replayAsync();
-    } catch (e) {}
-  }, []);
+  const playScoreSound = useCallback(() => {
+    if (scorePlayer) {
+      scorePlayer.seekTo(0);
+      scorePlayer.play();
+    }
+  }, [scorePlayer]);
 
-  const playCrashSound = useCallback(async () => {
-    try {
-      await crashSoundRef.current?.replayAsync();
-    } catch (e) {}
-  }, []);
+  const playCrashSound = useCallback(() => {
+    if (crashPlayer) {
+      crashPlayer.seekTo(0);
+      crashPlayer.play();
+    }
+  }, [crashPlayer]);
 
   // --- Game Loop (Physics & Movement) ---
   useEffect(() => {
@@ -546,7 +531,12 @@ export default function App() {
               <Pressable
                 key={lvl}
                 onPress={() => startGame(lvl)}
-                style={[styles.btnFriendly, styles[`btn${lvl}`]]}
+                style={
+                  [
+                    styles.btnFriendly,
+                    styles[`btn${lvl}` as keyof typeof styles],
+                  ] as any
+                }
               >
                 <Text style={styles.btnText}>{lvl} Mode</Text>
               </Pressable>
