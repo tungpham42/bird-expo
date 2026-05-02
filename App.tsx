@@ -14,16 +14,6 @@ import { Audio } from "expo-av";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-// --- Base64 Audio Constants ---
-// Replace these dummy silent WAVs with your actual Base64 strings.
-// Ensure they have the correct data URI prefix (e.g., 'data:audio/mp3;base64,...' or 'data:audio/wav;base64,...')
-const JUMP_B64 =
-  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
-const SCORE_B64 =
-  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
-const CRASH_B64 =
-  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
-
 // --- Global Constants ---
 const PIPE_WIDTH = 75;
 const BIRD_SIZE = 44;
@@ -143,15 +133,15 @@ export default function App() {
   useEffect(() => {
     async function loadAudio() {
       try {
-        const { sound: jumpSound } = await Audio.Sound.createAsync({
-          uri: JUMP_B64,
-        });
-        const { sound: scoreSound } = await Audio.Sound.createAsync({
-          uri: SCORE_B64,
-        });
-        const { sound: crashSound } = await Audio.Sound.createAsync({
-          uri: CRASH_B64,
-        });
+        const { sound: jumpSound } = await Audio.Sound.createAsync(
+          require("./assets/sounds/jump.wav"),
+        );
+        const { sound: scoreSound } = await Audio.Sound.createAsync(
+          require("./assets/sounds/score.wav"),
+        );
+        const { sound: crashSound } = await Audio.Sound.createAsync(
+          require("./assets/sounds/crash.wav"),
+        );
 
         jumpSoundRef.current = jumpSound;
         scoreSoundRef.current = scoreSound;
