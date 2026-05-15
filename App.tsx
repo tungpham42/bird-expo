@@ -11,6 +11,10 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Rect, Ellipse, Path, G, Line } from "react-native-svg";
 import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
+import mobileAds, {
+  TestIds,
+  useInterstitialAd,
+} from "react-native-google-mobile-ads";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -53,6 +57,11 @@ const LEVEL_CONFIGS: Record<Level, LevelConfig> = {
     pipeGap: 140,
   },
 };
+
+// Use Test ID for development, use your real Ad Unit ID for production
+const interstitialAdUnitId = __DEV__
+  ? TestIds.INTERSTITIAL
+  : "ca-app-pub-3585118770961536/3796701393";
 
 type GameState = "MENU" | "PLAYING" | "GAME_OVER";
 
@@ -122,10 +131,25 @@ const AnimatedCloud = ({
 export default function App() {
   const [gameState, setGameState] = useState<GameState>("MENU");
   const [level, setLevel] = useState<Level>("Medium");
-
   const [birdPos, setBirdPos] = useState<number>(SCREEN_HEIGHT / 2);
   const [pipes, setPipes] = useState<PipeData[]>([]);
   const [score, setScore] = useState<number>(0);
+
+  // --- NEW: Track Deaths ---
+  const [deathCount, setDeathCount] = useState<number>(0);
+
+  // --- NEW: AdMob Interstitial Hook ---
+  const { isLoaded, isClosed, load, show } = useInterstitialAd(
+    interstitialAdUnitId,
+    {
+      requestNonPersonalizedAdsOnly: true,
+    },
+  );
+
+  // Load the ad as soon as the app starts, and reload it whenever an ad is closed
+  useEffect(() => {
+    load();
+  }, [load, isClosed]);
 
   const velocityRef = useRef(0);
   const currentConfig = LEVEL_CONFIGS[level];
@@ -216,6 +240,20 @@ export default function App() {
     return () => clearInterval(pipeId);
   }, [gameState, currentConfig]);
 
+  // --- Game Over Logic & Ads ---
+  const handleGameOver = useCallback(() => {
+    setGameState("GAME_OVER");
+
+    setDeathCount((prevCount) => {
+      const newCount = prevCount + 1;
+      // Trigger the ad every 3 deaths
+      if (newCount % 3 === 0 && isLoaded) {
+        show();
+      }
+      return newCount;
+    });
+  }, [isLoaded, show]);
+
   // --- Collision Detection & Scoring ---
   useEffect(() => {
     if (gameState !== "PLAYING") return;
@@ -233,7 +271,7 @@ export default function App() {
 
     if (hasCollidedWithFloor || hasCollidedWithCeiling) {
       playCrashSound();
-      setGameState("GAME_OVER");
+      handleGameOver(); // <-- Replaced setGameState("GAME_OVER")
       return;
     }
 
@@ -247,7 +285,7 @@ export default function App() {
 
       if (inPipeHorizontalRange && (hitTopPipe || hitBottomPipe)) {
         playCrashSound();
-        setGameState("GAME_OVER");
+        handleGameOver(); // <-- Replaced setGameState("GAME_OVER")
       }
 
       if (!pipe.passed && pipe.x + PIPE_WIDTH < birdLeft) {
@@ -267,6 +305,7 @@ export default function App() {
     currentConfig,
     playCrashSound,
     playScoreSound,
+    handleGameOver,
   ]);
 
   // --- Controls ---
